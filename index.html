@@ -27,7 +27,6 @@
 
     <main class="flex-1 p-8 overflow-y-auto">
         
-        <!-- Governance Section -->
         <section id="governance" class="domain-section hidden">
             <div class="flex justify-between items-center mb-6">
                 <h2 class="text-2xl font-bold text-gray-800">حوزه عملکرد: حاکمیت (Governance)</h2>
@@ -42,19 +41,16 @@
                             <th class="p-2">شرح تغییر</th>
                             <th class="p-2">تأثیر هزینه (تومان)</th>
                             <th class="p-2">وضعیت</th>
-                            <th class="p-2">عملیات</th>
+                            <th class="p-2">حذف</th>
                         </tr>
                     </thead>
-                    <tbody id="changeLogBody">
-                        <!-- Rows will be inserted here by JS -->
-                    </tbody>
+                    <tbody id="changeLogBody"></tbody>
                 </table>
                 <button onclick="addNewRow()" class="mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">+ افزودن ردیف جدید</button>
                 <button onclick="saveToSupabase()" class="mt-4 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">💾 ذخیره در سرور</button>
             </div>
         </section>
 
-        <!-- EVM Dashboard Section -->
         <section id="evm" class="domain-section">
             <h2 class="text-2xl font-bold mb-6 text-gray-800">داشبورد ارزش کسب‌شده (EVM)</h2>
             <div class="grid grid-cols-3 gap-6">
@@ -114,14 +110,10 @@
         // ==========================================
         // تنظیمات اتصال به Supabase
         // ==========================================
-        // لطفاً مقادیر زیر را با اطلاعات حساب Supabase خود جایگزین کنید
-        const SUPABASE_URL = 'https://kmnuefvhzfumarxzcxik.supabase.co'; // مانند https://xyz.supabase.co
-        const SUPABASE_KEY = 'sb_publishable_k1kMhXGts-NPVP2OBghkHQ_gnEEGPpv'; // کلید طولانی anon public
+        const SUPABASE_URL = 'https://kmnuefvhzfumarxzcxik.supabase.co'; // آدرس خود را جایگزین کنید
+        const SUPABASE_KEY = 'sb_publishable_k1kMhXGts-NPVP2OBghkHQ_gnEEGPpv'; // کلید خود را جایگزین کنید
         
-        let supabase;
-        if (SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
-            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-        }
+        let supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
         // ==========================================
         // منطق تغییر بخش‌ها (Navigation)
@@ -151,14 +143,12 @@
                         <option ${data.status === 'رد شده' ? 'selected' : ''}>رد شده</option>
                     </select>
                 </td>
-                <td class="p-1 text-center"><button onclick="this.parentElement.parentElement.remove()" class="text-red-500 font-bold">X</button></td>
+                <td class="p-1 text-center"><button onclick="this.closest('tr').remove()" class="text-red-500 font-bold">X</button></td>
             `;
             tbody.appendChild(tr);
         }
 
         async function saveToSupabase() {
-            if (!supabase) { alert('اتصال به دیتابیس برقرار نیست! کلیدها را وارد کنید.'); return; }
-            
             const rows = document.querySelectorAll('#changeLogBody tr');
             const dataToSave = [];
             rows.forEach(row => {
@@ -171,7 +161,6 @@
                 });
             });
 
-            // ابتدا اطلاعات قبلی را پاک می‌کنیم سپس اطلاعات جدید را ذخیره می‌کنیم
             await supabase.from('change_logs').delete().neq('id', 0);
             const { error } = await supabase.from('change_logs').insert(dataToSave);
             
@@ -180,9 +169,12 @@
         }
 
         async function fetchChangeLogs() {
-            if (!supabase) return;
             const { data, error } = await supabase.from('change_logs').select('*');
-            if (error) return;
+            if (error) {
+                console.error(error);
+                addNewRow(); // اگر خطا داد حداقل یک ردیف خالی نشان دهد
+                return;
+            }
             document.getElementById('changeLogBody').innerHTML = '';
             if (data.length === 0) addNewRow();
             else data.forEach(item => addNewRow(item));
@@ -228,7 +220,6 @@
             document.getElementById('cpi-val').innerText = (cpi * 100).toFixed(1) + '%';
             document.getElementById('eac-val').innerText = eac.toLocaleString('fa-IR') + ' تومان';
 
-            // به‌روزرسانی رنگ‌ها
             document.getElementById('sv-status').innerText = sv >= 0 ? 'پیش از برنامه' : 'عقب از برنامه';
             document.getElementById('sv-status').className = sv >= 0 ? 'text-xs text-green-600 mt-2' : 'text-xs text-red-600 mt-2';
             
@@ -241,12 +232,9 @@
             document.getElementById('cpi-status').innerText = cpi >= 1 ? 'مطلوب' : 'هدررفت منابع';
             document.getElementById('cpi-status').className = cpi >= 1 ? 'text-xs text-green-600 mt-2' : 'text-xs text-red-600 mt-2';
 
-            // ذخیره در دیتابیس
-            if (supabase) {
-                supabase.from('evm_data').insert([{ pv, ev, ac, bac }]).then(({error}) => {
-                    if(!error) console.log('EVM saved!');
-                });
-            }
+            supabase.from('evm_data').insert([{ pv, ev, ac, bac }]).then(({error}) => {
+                if(error) console.error(error);
+            });
         }
 
         // اجرای اولیه
