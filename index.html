@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>سامانه مدیریت پروژه شهرک ویلایی - PMBOK 8</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        .excel-input { width: 100%; padding: 4px; border: 1px solid #d1d5db; border-radius: 4px; text-align: center; }
+    </style>
+</head>
+<body class="bg-gray-100 flex h-screen">
+
+    <aside class="w-64 bg-gray-800 text-white flex flex-col">
+        <div class="p-4 text-center border-b border-gray-700">
+            <h1 class="text-lg font-bold">پروژه شهرک ویلایی</h1>
+            <p class="text-xs text-gray-400">PMBOK 8th Edition</p>
+        </div>
+        <nav class="flex-1 p-2 space-y-1">
+            <button onclick="showSection('governance')" class="nav-item w-full text-right p-2 rounded hover:bg-gray-700 transition">۱. حاکمیت (تغییرات)</button>
+            <button onclick="showSection('evm')" class="nav-item w-full text-right p-2 rounded bg-green-700 hover:bg-green-600 font-bold">۲. داشبورد EVM</button>
+        </nav>
+    </aside>
+
+    <main class="flex-1 p-8 overflow-y-auto">
+        
+        <!-- Governance Section -->
+        <section id="governance" class="domain-section hidden">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold text-gray-800">حوزه عملکرد: حاکمیت (Governance)</h2>
+                <button onclick="exportToExcel()" class="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">⬇ خروجی اکسل</button>
+            </div>
+            <div class="bg-white p-4 rounded shadow">
+                <table class="w-full text-sm" id="changeLogTable">
+                    <thead class="bg-gray-200">
+                        <tr>
+                            <th class="p-2">شناسه</th>
+                            <th class="p-2">تاریخ</th>
+                            <th class="p-2">شرح تغییر</th>
+                            <th class="p-2">تأثیر هزینه (تومان)</th>
+                            <th class="p-2">وضعیت</th>
+                            <th class="p-2">عملیات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="changeLogBody">
+                        <!-- Rows will be inserted here by JS -->
+                    </tbody>
+                </table>
+                <button onclick="addNewRow()" class="mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">+ افزودن ردیف جدید</button>
+                <button onclick="saveToSupabase()" class="mt-4 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700">💾 ذخیره در سرور</button>
+            </div>
+        </section>
+
+        <!-- EVM Dashboard Section -->
+        <section id="evm" class="domain-section">
+            <h2 class="text-2xl font-bold mb-6 text-gray-800">داشبورد ارزش کسب‌شده (EVM)</h2>
+            <div class="grid grid-cols-3 gap-6">
+                <div class="col-span-1 bg-white p-6 rounded shadow">
+                    <h3 class="font-bold mb-4 border-b pb-2">ورودی‌های ماهانه (تومان)</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600">ارزش برنامه‌ریزی شده (PV)</label>
+                            <input type="number" id="pv" value="2000000000" class="mt-1 w-full p-2 border rounded">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600">ارزش کسب شده (EV)</label>
+                            <input type="number" id="ev" value="1800000000" class="mt-1 w-full p-2 border rounded">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600">هزینه واقعی (AC)</label>
+                            <input type="number" id="ac" value="2100000000" class="mt-1 w-full p-2 border rounded">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-600">بودجه کل پروژه (BAC)</label>
+                            <input type="number" id="bac" value="10000000000" class="mt-1 w-full p-2 border rounded">
+                        </div>
+                        <button onclick="calculateEVM()" class="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700">محاسبه و ذخیره</button>
+                    </div>
+                </div>
+                <div class="col-span-2 grid grid-cols-2 gap-4">
+                    <div class="bg-white p-4 rounded shadow text-center">
+                        <p class="text-sm text-gray-500">انحراف زمان‌بندی (SV)</p>
+                        <p id="sv-val" class="text-2xl font-bold text-blue-600">0</p>
+                        <p id="sv-status" class="text-xs text-green-600 mt-2">مطلوب</p>
+                    </div>
+                    <div class="bg-white p-4 rounded shadow text-center">
+                        <p class="text-sm text-gray-500">انحراف هزینه (CV)</p>
+                        <p id="cv-val" class="text-2xl font-bold text-blue-600">0</p>
+                        <p id="cv-status" class="text-xs text-green-600 mt-2">مطلوب</p>
+                    </div>
+                    <div class="bg-white p-4 rounded shadow text-center">
+                        <p class="text-sm text-gray-500">شاخص زمان (SPI)</p>
+                        <p id="spi-val" class="text-2xl font-bold text-purple-600">0%</p>
+                        <p id="spi-status" class="text-xs text-green-600 mt-2">طبق برنامه</p>
+                    </div>
+                    <div class="bg-white p-4 rounded shadow text-center">
+                        <p class="text-sm text-gray-500">شاخص هزینه (CPI)</p>
+                        <p id="cpi-val" class="text-2xl font-bold text-purple-600">0%</p>
+                        <p id="cpi-status" class="text-xs text-green-600 mt-2">طبق بودجه</p>
+                    </div>
+                    <div class="col-span-2 bg-gray-800 text-white p-4 rounded shadow text-center">
+                        <p class="text-sm text-gray-400">تخمین هزینه در تکمیل پروژه (EAC)</p>
+                        <p id="eac-val" class="text-3xl font-bold text-white">0</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script>
+        // ==========================================
+        // تنظیمات اتصال به Supabase
+        // ==========================================
+        // لطفاً مقادیر زیر را با اطلاعات حساب Supabase خود جایگزین کنید
+        const SUPABASE_URL = 'https://vieblhikmrqahudhjkvf.supabase.co'; // مانند https://xyz.supabase.co
+        const SUPABASE_KEY = 'sb_publishable_J_q36i3ljiITvIlbrWg4Kw_ngFrlyXs'; // کلید طولانی anon public
+        
+        let supabase;
+        if (SUPABASE_URL !== 'YOUR_SUPABASE_URL') {
+            supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        }
+
+        // ==========================================
+        // منطق تغییر بخش‌ها (Navigation)
+        // ==========================================
+        function showSection(sectionId) {
+            document.querySelectorAll('.domain-section').forEach(sec => sec.classList.add('hidden'));
+            document.getElementById(sectionId).classList.remove('hidden');
+            if (sectionId === 'governance') fetchChangeLogs();
+        }
+
+        // ==========================================
+        // منطق فرم تغییرات (Change Log)
+        // ==========================================
+        function addNewRow(data = {}) {
+            const tbody = document.getElementById('changeLogBody');
+            const tr = document.createElement('tr');
+            tr.className = 'border-b';
+            tr.innerHTML = `
+                <td class="p-1"><input type="text" class="excel-input change_id" value="${data.change_id || ''}" placeholder="CH-01"></td>
+                <td class="p-1"><input type="date" class="excel-input request_date" value="${data.request_date || ''}"></td>
+                <td class="p-1"><input type="text" class="excel-input description" value="${data.description || ''}" placeholder="شرح تغییر"></td>
+                <td class="p-1"><input type="number" class="excel-input cost_impact" value="${data.cost_impact || 0}"></td>
+                <td class="p-1">
+                    <select class="excel-input status">
+                        <option ${data.status === 'در حال بررسی' ? 'selected' : ''}>در حال بررسی</option>
+                        <option ${data.status === 'تأیید شده' ? 'selected' : ''}>تأیید شده</option>
+                        <option ${data.status === 'رد شده' ? 'selected' : ''}>رد شده</option>
+                    </select>
+                </td>
+                <td class="p-1 text-center"><button onclick="this.parentElement.parentElement.remove()" class="text-red-500 font-bold">X</button></td>
+            `;
+            tbody.appendChild(tr);
+        }
+
+        async function saveToSupabase() {
+            if (!supabase) { alert('اتصال به دیتابیس برقرار نیست! کلیدها را وارد کنید.'); return; }
+            
+            const rows = document.querySelectorAll('#changeLogBody tr');
+            const dataToSave = [];
+            rows.forEach(row => {
+                dataToSave.push({
+                    change_id: row.querySelector('.change_id').value,
+                    request_date: row.querySelector('.request_date').value,
+                    description: row.querySelector('.description').value,
+                    cost_impact: row.querySelector('.cost_impact').value,
+                    status: row.querySelector('.status').value
+                });
+            });
+
+            // ابتدا اطلاعات قبلی را پاک می‌کنیم سپس اطلاعات جدید را ذخیره می‌کنیم
+            await supabase.from('change_logs').delete().neq('id', 0);
+            const { error } = await supabase.from('change_logs').insert(dataToSave);
+            
+            if (error) alert('خطا در ذخیره‌سازی: ' + error.message);
+            else alert('اطلاعات با موفقیت در سرور ذخیره شد!');
+        }
+
+        async function fetchChangeLogs() {
+            if (!supabase) return;
+            const { data, error } = await supabase.from('change_logs').select('*');
+            if (error) return;
+            document.getElementById('changeLogBody').innerHTML = '';
+            if (data.length === 0) addNewRow();
+            else data.forEach(item => addNewRow(item));
+        }
+
+        function exportToExcel() {
+            let data = [];
+            const rows = document.querySelectorAll('#changeLogBody tr');
+            data.push(["شناسه", "تاریخ", "شرح تغییر", "تأثیر هزینه", "وضعیت"]);
+            rows.forEach(row => {
+                data.push([
+                    row.querySelector('.change_id').value,
+                    row.querySelector('.request_date').value,
+                    row.querySelector('.description').value,
+                    row.querySelector('.cost_impact').value,
+                    row.querySelector('.status').value
+                ]);
+            });
+            const ws = XLSX.utils.aoa_to_sheet(data);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "ChangeLog");
+            XLSX.writeFile(wb, "PMO_ChangeLog.xlsx");
+        }
+
+        // ==========================================
+        // منطق داشبورد EVM
+        // ==========================================
+        function calculateEVM() {
+            const pv = parseFloat(document.getElementById('pv').value) || 0;
+            const ev = parseFloat(document.getElementById('ev').value) || 0;
+            const ac = parseFloat(document.getElementById('ac').value) || 0;
+            const bac = parseFloat(document.getElementById('bac').value) || 0;
+
+            const sv = ev - pv;
+            const cv = ev - ac;
+            const spi = pv > 0 ? (ev / pv) : 0;
+            const cpi = ac > 0 ? (ev / ac) : 0;
+            const eac = cpi > 0 ? (bac / cpi) : 0;
+
+            document.getElementById('sv-val').innerText = sv.toLocaleString('fa-IR');
+            document.getElementById('cv-val').innerText = cv.toLocaleString('fa-IR');
+            document.getElementById('spi-val').innerText = (spi * 100).toFixed(1) + '%';
+            document.getElementById('cpi-val').innerText = (cpi * 100).toFixed(1) + '%';
+            document.getElementById('eac-val').innerText = eac.toLocaleString('fa-IR') + ' تومان';
+
+            // به‌روزرسانی رنگ‌ها
+            document.getElementById('sv-status').innerText = sv >= 0 ? 'پیش از برنامه' : 'عقب از برنامه';
+            document.getElementById('sv-status').className = sv >= 0 ? 'text-xs text-green-600 mt-2' : 'text-xs text-red-600 mt-2';
+            
+            document.getElementById('cv-status').innerText = cv >= 0 ? 'صرفه‌جویی' : 'بیش از بودجه';
+            document.getElementById('cv-status').className = cv >= 0 ? 'text-xs text-green-600 mt-2' : 'text-xs text-red-600 mt-2';
+            
+            document.getElementById('spi-status').innerText = spi >= 1 ? 'مطلوب' : 'نیاز به تسریع';
+            document.getElementById('spi-status').className = spi >= 1 ? 'text-xs text-green-600 mt-2' : 'text-xs text-red-600 mt-2';
+            
+            document.getElementById('cpi-status').innerText = cpi >= 1 ? 'مطلوب' : 'هدررفت منابع';
+            document.getElementById('cpi-status').className = cpi >= 1 ? 'text-xs text-green-600 mt-2' : 'text-xs text-red-600 mt-2';
+
+            // ذخیره در دیتابیس
+            if (supabase) {
+                supabase.from('evm_data').insert([{ pv, ev, ac, bac }]).then(({error}) => {
+                    if(!error) console.log('EVM saved!');
+                });
+            }
+        }
+
+        // اجرای اولیه
+        window.onload = () => {
+            calculateEVM();
+            fetchChangeLogs();
+        };
+    </script>
+</body>
+</html>
